@@ -1,17 +1,28 @@
 {
-  "name": "TrafficAssistFresh",
+  "name": "traffic-assist-fresh",
   "version": "0.0.1",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
     "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "react-native start",
     "test": "jest"
   },
   "dependencies": {
+    "@types/react-native-keep-awake": "^2.0.8",
+    "eventemitter3": "^5.0.1",
     "react": "18.2.0",
-    "react-native": "0.74.5"
+    "react-native": "0.74.5",
+    "react-native-geolocation-service": "^5.3.1",
+    "react-native-haptic-feedback": "^2.3.3",
+    "react-native-heading": "^1.1.1",
+    "react-native-keep-awake": "^4.0.0",
+    "react-native-reanimated": "3.8.1",
+    "react-native-tts": "^4.1.1",
+    "react-native-vision-camera": "^4.7.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
