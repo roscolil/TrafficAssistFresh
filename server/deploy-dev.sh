@@ -37,6 +37,7 @@ fi
 
 # Step 1: Build the container with dev tag
 echo -e "${BLUE}🐳 Building development container image...${NC}"
+cd "$(dirname "$0")"  # Ensure we're in the server directory
 gcloud builds submit --tag $IMAGE_NAME:dev .
 
 if [ $? -ne 0 ]; then

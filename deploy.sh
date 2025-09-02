@@ -34,6 +34,7 @@ fi
 # Auto-select deployment based on branch
 if [ "$CURRENT_BRANCH" = "development" ]; then
     echo -e "${BLUE}🚧 Development branch detected - deploying to DEV environment${NC}"
+    cd "$(dirname "$0")"  # Ensure we're in the root directory
     exec ./server/deploy-dev.sh
 elif [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
     echo -e "${GREEN}🏭 Main/Master branch detected - deploying to PRODUCTION${NC}"
