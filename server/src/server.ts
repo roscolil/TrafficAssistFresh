@@ -65,9 +65,9 @@ app.get('/', (req, res) => {
       'POST /api/detections - Submit detection',
       'GET /api/traffic/nearby - Get nearby traffic',
       'GET /api/users - User endpoints',
-      'POST /api/analytics/events - Analytics'
+      'POST /api/analytics/events - Analytics',
     ],
-    websocket: 'Available for real-time updates'
+    websocket: 'Available for real-time updates',
   });
 });
 
