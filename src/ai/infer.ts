@@ -11,6 +11,9 @@ try {
 let model: ReturnType<typeof createModel> | null = null;
 let tried = false;
 
+// Webpack-defined constant for web builds
+declare const __IS_WEB__: boolean;
+
 async function ensure() {
   if (model || tried) return;
   tried = true;
@@ -21,7 +24,15 @@ async function ensure() {
   }
 
   try {
-    // @ts-ignore asset bundling
+    // Skip model loading for web builds using webpack-defined constant
+    if (typeof __IS_WEB__ !== 'undefined' && __IS_WEB__) {
+      console.warn(
+        'TensorFlow Lite not available in web browsers; using mock detections.',
+      );
+      return;
+    }
+
+    // @ts-ignore asset bundling - only for native builds
     model = await createModel(require('./models/tlr_yolov8n_int8.tflite'));
   } catch (e) {
     console.warn('Model load failed; using mock detections.', e);

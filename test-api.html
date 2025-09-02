@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Traffic Assist API Test</title>
+</head>
+
+<body>
+  <h1>Traffic Assist API Test</h1>
+  <div id="results"></div>
+
+  <script>
+    const API_URL = 'https://traffic-assist-api-1093602798874.us-central1.run.app';
+    const results = document.getElementById('results');
+
+    async function testAPI() {
+      try {
+        // Test health endpoint
+        const healthResponse = await fetch(`${API_URL}/health`);
+        const healthData = await healthResponse.json();
+
+        results.innerHTML += `<h3>✅ Health Check</h3><pre>${JSON.stringify(healthData, null, 2)}</pre>`;
+
+        // Test status endpoint
+        const statusResponse = await fetch(`${API_URL}/api/status`);
+        const statusData = await statusResponse.json();
+
+        results.innerHTML += `<h3>✅ API Status</h3><pre>${JSON.stringify(statusData, null, 2)}</pre>`;
+
+      } catch (error) {
+        results.innerHTML += `<h3>❌ Error</h3><pre>${error.message}</pre>`;
+      }
+    }
+
+    testAPI();
+  </script>
+</body>
+
+</html>

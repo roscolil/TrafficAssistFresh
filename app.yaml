@@ -1,0 +1,31 @@
+runtime: nodejs18
+
+handlers:
+  # Serve static files
+  - url: /static
+    static_dir: dist/static
+    secure: always
+
+  # Serve manifest and service worker
+  - url: /(manifest\.json|sw\.js|icon-.*\.png)
+    static_files: dist/\1
+    upload: dist/(manifest\.json|sw\.js|icon-.*\.png)
+    secure: always
+
+  # Serve main bundle
+  - url: /bundle\..*\.js
+    static_files: dist/bundle.\1.js
+    upload: dist/bundle\..*\.js
+    secure: always
+
+  # Serve all other requests to index.html for SPA routing
+  - url: /.*
+    static_files: dist/index.html
+    upload: dist/index.html
+    secure: always
+
+# Enable gzip compression
+default_expiration: '1d'
+
+env_variables:
+  NODE_ENV: production

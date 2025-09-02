@@ -1,0 +1,43 @@
+{
+  "name": "traffic-assist-api",
+  "version": "1.0.0",
+  "description": "Traffic Assist Backend API",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node dist/server.js",
+    "dev": "ts-node --transpile-only src/server.ts",
+    "dev:watch": "ts-node --transpile-only --watch src/server.ts",
+    "build": "tsc",
+    "setup": "./setup-local.sh",
+    "deploy": "./deploy-backend.sh",
+    "db:init": "psql -d traffic_assist_dev -U traffic_assist_user -f src/db/init.sql",
+    "db:reset": "psql postgres -c 'DROP DATABASE IF EXISTS traffic_assist_dev;' && psql postgres -c 'CREATE DATABASE traffic_assist_dev OWNER traffic_assist_user;' && npm run db:init",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "echo \"Linting not configured yet\"",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "express-rate-limit": "^6.8.1",
+    "pg": "^8.11.1",
+    "@google-cloud/pubsub": "^4.0.0",
+    "@google-cloud/storage": "^7.0.0",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/cors": "^2.8.13",
+    "@types/pg": "^8.10.2",
+    "@types/uuid": "^9.0.2",
+    "@types/node": "^20.4.5",
+    "typescript": "^5.1.6",
+    "ts-node": "^10.9.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

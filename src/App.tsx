@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react';
 import {SafeAreaView, StatusBar, View, Text} from 'react-native';
 import {flags} from './config/flags';
+import {backendClient} from './backend/UnifiedBackendClient';
 
 // Re-enable native modules gradually for testing
 const ENABLE_NATIVE_MODULES = true;
@@ -11,7 +12,12 @@ const ENABLE_CONNECTIVITY_CHECK = true;
 let KeepAwake: any = () => null; // Default to no-op component
 if (ENABLE_NATIVE_MODULES) {
   try {
-    KeepAwake = require('react-native-keep-awake').default;
+    const keepAwakeModule = require('react-native-keep-awake');
+    KeepAwake =
+      keepAwakeModule.default ||
+      keepAwakeModule.KeepAwake ||
+      keepAwakeModule ||
+      (() => null);
   } catch (error) {
     console.warn('react-native-keep-awake not available:', error);
     KeepAwake = () => null;
@@ -24,7 +30,12 @@ let ConnectivityCheck: any = MinimalConnectivityCheck;
 
 if (ENABLE_CAMERA) {
   try {
-    CameraView = require('./camera/CameraView').default;
+    const cameraModule = require('./camera/CameraView');
+    CameraView =
+      cameraModule.default ||
+      cameraModule.CameraView ||
+      cameraModule ||
+      MinimalCameraView;
   } catch (error) {
     console.warn('CameraView not available:', error);
     CameraView = MinimalCameraView;
@@ -33,7 +44,12 @@ if (ENABLE_CAMERA) {
 
 if (ENABLE_CONNECTIVITY_CHECK) {
   try {
-    ConnectivityCheck = require('./dev/ConnectivityCheck').default;
+    const connectivityModule = require('./dev/ConnectivityCheck');
+    ConnectivityCheck =
+      connectivityModule.default ||
+      connectivityModule.ConnectivityCheck ||
+      connectivityModule ||
+      MinimalConnectivityCheck;
   } catch (error) {
     console.warn('ConnectivityCheck not available:', error);
     ConnectivityCheck = MinimalConnectivityCheck;
@@ -80,6 +96,19 @@ function MinimalConnectivityCheck() {
 
 export default function App() {
   useEffect(() => {
+    // Initialize backend client
+    backendClient.initialize({
+      apiUrl: 'https://your-api-url.run.app',
+      wsUrl: 'wss://your-ws-url.run.app',
+      environment: 'web',
+    });
+
+    // Track app launch
+    backendClient.trackEvent('app_launched', {
+      timestamp: Date.now(),
+      platform: 'web',
+    });
+
     // Safely load intersection pack
     try {
       const loadIntersectionPack =
