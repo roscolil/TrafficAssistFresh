@@ -51,6 +51,26 @@ import userRoutes from './routes/users';
 import analyticsRoutes from './routes/analytics';
 import {healthCheck, systemStatus} from './routes/health';
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Traffic Assist API',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    endpoints: [
+      'GET /health - Health check',
+      'GET /api/status - System status',
+      'POST /api/devices/register - Register device',
+      'GET /api/devices - List devices',
+      'POST /api/detections - Submit detection',
+      'GET /api/traffic/nearby - Get nearby traffic',
+      'GET /api/users - User endpoints',
+      'POST /api/analytics/events - Analytics'
+    ],
+    websocket: 'Available for real-time updates'
+  });
+});
+
 // Health check routes
 app.get('/health', healthCheck);
 app.get('/api/status', systemStatus);
