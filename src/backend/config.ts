@@ -17,7 +17,7 @@ const productionConfig: BackendConfig = {
   environment: 'web',
 };
 
-// Development configuration  
+// Development configuration
 const developmentConfig: BackendConfig = {
   apiUrl: 'https://traffic-assist-api-dev-axoirfzmzq-uc.a.run.app',
   wsUrl: 'wss://traffic-assist-api-dev-axoirfzmzq-uc.a.run.app',
@@ -32,27 +32,33 @@ const localConfig: BackendConfig = {
 };
 
 // Environment detection
-export const getEnvironmentMode = (): 'local' | 'development' | 'production' => {
+export const getEnvironmentMode = ():
+  | 'local'
+  | 'development'
+  | 'production' => {
   // Check if running locally
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.hostname === 'localhost'
+  ) {
     return 'local';
   }
-  
+
   // Check environment variables
   const nodeEnv = getEnvVar('NODE_ENV', '');
   const reactEnv = getEnvVar('REACT_APP_ENVIRONMENT', '');
-  
+
   if (nodeEnv === 'development' || reactEnv === 'development') {
     return 'development';
   }
-  
+
   return 'production';
 };
 
 // Get default config based on environment
 const getDefaultConfig = (): BackendConfig => {
   const mode = getEnvironmentMode();
-  
+
   switch (mode) {
     case 'local':
       return localConfig;
@@ -116,7 +122,7 @@ export const getBackendConfig = (): BackendConfig => {
   if (environment === 'web') {
     // For web, use current host if running locally
     if (
-      typeof window !== 'undefined' && 
+      typeof window !== 'undefined' &&
       window.location.hostname === 'localhost' &&
       config.apiUrl === defaultConfig.apiUrl
     ) {
@@ -130,7 +136,7 @@ export const getBackendConfig = (): BackendConfig => {
     }
 
     if (
-      typeof window !== 'undefined' && 
+      typeof window !== 'undefined' &&
       window.location.hostname === 'localhost' &&
       config.wsUrl === defaultConfig.wsUrl
     ) {
