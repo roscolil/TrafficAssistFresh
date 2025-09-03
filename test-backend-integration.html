@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traffic Assist - Backend Integration Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #1a1a1a;
+      color: #ffffff;
+    }
+
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+
+    .online {
+      background-color: #4caf50;
+    }
+
+    .offline {
+      background-color: #f44336;
+    }
+
+    .connecting {
+      background-color: #ff9800;
+    }
+
+    .detection {
+      border: 1px solid #333;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      background-color: #2a2a2a;
+    }
+
+    .controls {
+      margin: 20px 0;
+    }
+
+    button {
+      background-color: #2196f3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #1976d2;
+    }
+
+    #log {
+      background-color: #000;
+      color: #00ff00;
+      padding: 10px;
+      border-radius: 5px;
+      height: 200px;
+      overflow-y: scroll;
+      font-family: monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>🚦 Traffic Assist - Backend Integration Test</h1>
+
+  <div class="controls">
+    <button onclick="testDetection()">Test Detection</button>
+    <button onclick="testBackendConnection()">Test Backend</button>
+    <button onclick="clearLog()">Clear Log</button>
+  </div>
+
+  <div id="status" class="status offline">
+    Backend Status: Checking...
+  </div>
+
+  <div id="detections">
+    <h3>Recent Detections:</h3>
+    <div id="detection-list"></div>
+  </div>
+
+  <div>
+    <h3>Console Log:</h3>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    let detectionCount = 0;
+
+    function log(message) {
+      const logDiv = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function updateStatus(status, message) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = `status ${status}`;
+      statusDiv.textContent = `Backend Status: ${message}`;
+    }
+
+    async function testBackendConnection() {
+      log('Testing backend connection...');
+      updateStatus('connecting', 'Testing...');
+
+      try {
+        // Test the development backend
+        const response = await fetch('https://traffic-assist-api-dev-axoirfzmzq-uc.a.run.app/health', {
+          method: 'GET',
+          mode: 'cors'
+        });
+
+        if (response.ok) {
+          log('✅ Backend API is accessible');
+          updateStatus('online', 'Connected');
+
+          // Test device registration
+          await testDeviceRegistration();
+        } else {
+          log(`❌ Backend returned status: ${response.status}`);
+          updateStatus('offline', 'API Error');
+        }
+      } catch (error) {
+        log(`❌ Backend connection failed: ${error.message}`);
+        updateStatus('offline', 'Connection Failed');
+      }
+    }
+
+    async function testDeviceRegistration() {
+      log('Testing device registration...');
+
+      try {
+        const deviceInfo = {
+          platform: 'web',
+          userAgent: navigator.userAgent,
+          timestamp: Date.now()
+        };
+
+        const response = await fetch('https://traffic-assist-api-dev-axoirfzmzq-uc.a.run.app/api/devices/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(deviceInfo)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          log(`✅ Device registered: ${data.deviceId}`);
+          localStorage.setItem('traffic_assist_device_id', data.deviceId);
+          return data.deviceId;
+        } else {
+          const errorText = await response.text();
+          log(`❌ Device registration failed: ${response.status} - ${errorText}`);
+          return null;
+        }
+      } catch (error) {
+        log(`❌ Device registration error: ${error.message}`);
+        return null;
+      }
+    }
+
+    async function testDetection() {
+      log('Generating test detection...');
+      detectionCount++;
+
+      const states = ['red', 'yellow', 'green'];
+      const detection = {
+        id: `test_detection_${Date.now()}`,
+        state: states[Math.floor(Math.random() * states.length)],
+        confidence: 0.8 + Math.random() * 0.2,
+        bbox: [
+          0.3 + Math.random() * 0.4,
+          0.2 + Math.random() * 0.4,
+          0.1 + Math.random() * 0.1,
+          0.1 + Math.random() * 0.1
+        ],
+        timestamp: Date.now()
+      };
+
+      // Display detection
+      displayDetection(detection);
+
+      // Test backend submission
+      await submitDetectionToBackend(detection);
+    }
+
+    function displayDetection(detection) {
+      const detectionList = document.getElementById('detection-list');
+      const detectionDiv = document.createElement('div');
+      detectionDiv.className = 'detection';
+      detectionDiv.innerHTML = `
+                <strong>Detection ${detectionCount}</strong><br>
+                State: <span style="color: ${getStateColor(detection.state)}">${detection.state}</span><br>
+                Confidence: ${(detection.confidence * 100).toFixed(1)}%<br>
+                BBox: [${detection.bbox.map(x => x.toFixed(3)).join(', ')}]<br>
+                Time: ${new Date(detection.timestamp).toLocaleTimeString()}
+            `;
+
+      detectionList.insertBefore(detectionDiv, detectionList.firstChild);
+
+      // Keep only last 5 detections
+      while (detectionList.children.length > 5) {
+        detectionList.removeChild(detectionList.lastChild);
+      }
+    }
+
+    function getStateColor(state) {
+      switch (state) {
+        case 'red': return '#f44336';
+        case 'yellow': return '#ff9800';
+        case 'green': return '#4caf50';
+        default: return '#999';
+      }
+    }
+
+    async function submitDetectionToBackend(detection) {
+      const deviceId = localStorage.getItem('traffic_assist_device_id');
+      if (!deviceId) {
+        log('❌ No device ID - registering device first...');
+        const newDeviceId = await testDeviceRegistration();
+        if (!newDeviceId) {
+          log('❌ Cannot proceed without device registration');
+          return;
+        }
+      }
+
+      log(`Submitting detection to backend with device ID: ${deviceId || 'newly registered'}...`);
+
+      try {
+        const finalDeviceId = deviceId || localStorage.getItem('traffic_assist_device_id');
+        const payload = {
+          deviceId: finalDeviceId,
+          detection: {
+            confidence: detection.confidence,
+            state: detection.state,
+            bbox: detection.bbox
+          },
+          location: { lat: 37.7749, lng: -122.4194 }, // San Francisco coordinates
+          heading: 45,
+          timestamp: new Date().toISOString()
+        };
+
+        log(`Payload: ${JSON.stringify(payload, null, 2)}`);
+
+        const response = await fetch('https://traffic-assist-api-dev-axoirfzmzq-uc.a.run.app/api/detections', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          log(`✅ Detection submitted successfully: ${JSON.stringify(result)}`);
+        } else {
+          const errorText = await response.text();
+          log(`❌ Detection submission failed: ${response.status} - ${errorText}`);
+        }
+      } catch (error) {
+        log(`❌ Detection submission error: ${error.message}`);
+      }
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // Initialize
+    log('Traffic Assist Backend Integration Test started');
+    testBackendConnection();
+  </script>
+</body>
+
+</html>

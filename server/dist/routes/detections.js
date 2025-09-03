@@ -1,43 +1,58 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const uuid_1 = require("uuid");
 const server_1 = require("../server");
 const router = (0, express_1.Router)();
 // Submit traffic detection
 router.post('/', async (req, res) => {
     try {
-        const { deviceId, detection, location, heading, timestamp } = req.body;
-        const detectionId = (0, uuid_1.v4)();
-        // Store detection in database
-        await server_1.pool.query(`
-      INSERT INTO detections (id, device_id, location, heading, timestamp, 
-                             confidence, traffic_light_state, bbox)
-      VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5, $6, $7, $8, $9)
-    `, [
-            detectionId,
-            deviceId,
-            location.lng,
-            location.lat,
-            heading,
-            new Date(timestamp),
-            detection.confidence,
-            detection.state,
-            JSON.stringify(detection.bbox),
-        ]);
+        // Handle both flat and nested formats
+        const { device_id, deviceId, detection, location, latitude, longitude, confidence, traffic_light_color, heading, timestamp, } = req.body;
+        const finalDeviceId = device_id || deviceId;
+        const finalConfidence = confidence || detection?.confidence;
+        const finalLocation = location || { lat: latitude, lng: longitude };
+        console.log('Received detection data:', JSON.stringify(req.body, null, 2));
+        console.log('Parsed values:', {
+            finalDeviceId,
+            finalConfidence,
+            finalLocation,
+            timestamp,
+        });
+        let detectionId;
+        // Let database generate UUID - don't specify ID
+        try {
+            const result = await server_1.pool.query(`INSERT INTO detections (device_id, timestamp, confidence) 
+         VALUES ($1, $2, $3) RETURNING id`, [finalDeviceId, new Date(timestamp), finalConfidence]);
+            detectionId = result.rows[0].id;
+            console.log('Detection inserted successfully with ID:', detectionId);
+        }
+        catch (insertError) {
+            console.error('Detection insert failed:', insertError);
+            // Return the specific error
+            res.status(500).json({
+                error: 'Detection insert failed',
+                details: insertError instanceof Error ? insertError.message : 'Unknown error',
+                sqlState: insertError?.code || 'unknown',
+                received: req.body,
+            });
+            return;
+        }
         // Publish to Pub/Sub for real-time processing
         const eventData = {
             detectionId,
-            deviceId,
-            location,
-            detection,
+            deviceId: finalDeviceId,
+            location: finalLocation,
+            detection: detection || {
+                confidence: finalConfidence,
+                state: traffic_light_color,
+            },
             timestamp,
         };
         await server_1.pubsub
             .topic('traffic-events')
             .publish(Buffer.from(JSON.stringify(eventData)));
         // Process nearby users for real-time alerts
-        await processNearbyAlerts(location, detection, detectionId);
+        await processNearbyAlerts(finalLocation, detection || { confidence: finalConfidence, state: traffic_light_color }, detectionId);
         res.status(201).json({
             detectionId,
             status: 'processed',

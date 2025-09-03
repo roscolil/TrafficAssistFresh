@@ -1,4 +1,4 @@
 rootProject.name = 'TrafficAssistFresh'
-apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
+def nodeModulesDir = new File(rootProject.projectDir, '../node_modules')
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')

@@ -52,9 +52,34 @@ const traffic_1 = __importDefault(require("./routes/traffic"));
 const users_1 = __importDefault(require("./routes/users"));
 const analytics_1 = __importDefault(require("./routes/analytics"));
 const health_1 = require("./routes/health");
+const init_inline_1 = require("./routes/init-inline");
+// Root route
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Traffic Assist API',
+        version: '1.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        endpoints: [
+            'GET /health - Health check',
+            'GET /api/status - System status',
+            'POST /api/devices/register - Register device',
+            'GET /api/devices - List devices',
+            'POST /api/detections - Submit detection',
+            'GET /api/traffic/nearby - Get nearby traffic',
+            'GET /api/users - User endpoints',
+            'POST /api/analytics/events - Analytics',
+            'POST /api/admin/init-database - Initialize database schema (dev only)',
+            'GET /api/admin/database-schema - Get database schema info',
+        ],
+        websocket: 'Available for real-time updates',
+    });
+});
 // Health check routes
 app.get('/health', health_1.healthCheck);
 app.get('/api/status', health_1.systemStatus);
+app.post('/api/admin/init-database', health_1.initializeDatabaseSchema);
+app.post('/api/admin/init-database-inline', init_inline_1.initializeDatabaseInline);
+app.get('/api/admin/database-schema', health_1.databaseSchema);
 // API routes
 app.use('/api/devices', devices_1.default);
 app.use('/api/detections', detections_1.default);

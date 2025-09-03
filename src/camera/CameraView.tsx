@@ -1,10 +1,13 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {View, Platform, Text} from 'react-native';
+import {logWarn, logInfo, logDebug, logError} from '../utils/logger';
+import DetectionOverlay from '../components/DetectionOverlay';
+import DemoMode from '../components/DemoMode';
 
 // Test flags to isolate issues - gradually enable
 const ENABLE_SENSORS = true;
 const ENABLE_VISION_CAMERA = true; // Try enabling again with better error handling
-const ENABLE_CAMERA_DEVICES = true; // Don't use camera devices yet
+const ENABLE_CAMERA_DEVICES = false; // Disable for simulator demo mode
 const ENABLE_REANIMATED = true;
 const ENABLE_AI_POLICY = true;
 
@@ -18,7 +21,7 @@ if (ENABLE_SENSORS) {
     useHeading = sensors.useHeading;
     useLocation = sensors.useLocation;
   } catch (error) {
-    console.warn('Sensor modules not available:', error);
+    logWarn('Sensor modules not available', error, 'CameraView');
   }
 }
 
@@ -30,9 +33,17 @@ let runOnJS: any;
 
 if (ENABLE_VISION_CAMERA) {
   try {
-    console.log('Attempting to load react-native-vision-camera...');
+    logDebug(
+      'Attempting to load react-native-vision-camera',
+      undefined,
+      'CameraView',
+    );
     const visionCamera = require('react-native-vision-camera');
-    console.log('Vision camera module loaded successfully');
+    logInfo(
+      'Vision camera module loaded successfully',
+      undefined,
+      'CameraView',
+    );
 
     Camera = visionCamera.Camera;
 
@@ -41,9 +52,13 @@ if (ENABLE_VISION_CAMERA) {
       useFrameProcessor = visionCamera.useFrameProcessor;
     }
 
-    console.log('Vision camera components extracted successfully');
+    logDebug(
+      'Vision camera components extracted successfully',
+      undefined,
+      'CameraView',
+    );
   } catch (error) {
-    console.error('Failed to load react-native-vision-camera:', error);
+    logError('Failed to load react-native-vision-camera', error, 'CameraView');
     Camera = null;
   }
 }
@@ -53,7 +68,7 @@ if (ENABLE_REANIMATED) {
     const reanimated = require('react-native-reanimated');
     runOnJS = reanimated.runOnJS;
   } catch (error) {
-    console.warn('react-native-reanimated not available:', error);
+    logWarn('react-native-reanimated not available', error, 'CameraView');
   }
 }
 
@@ -66,25 +81,31 @@ if (ENABLE_AI_POLICY) {
   try {
     runDetector = require('../ai/infer').runDetector;
   } catch (error) {
-    console.warn('AI inference module not available:', error);
+    logWarn('AI inference module not available', error, 'CameraView');
   }
 
   try {
     speakCue = require('../voice/speech').speakCue;
   } catch (error) {
-    console.warn('Speech module not available:', error);
+    logWarn('Speech module not available', error, 'CameraView');
   }
 
   try {
     useEarlyWarning = require('../logic/policy').useEarlyWarning;
   } catch (error) {
-    console.warn('Policy module not available:', error);
+    logWarn('Policy module not available', error, 'CameraView');
   }
 }
 
 export default function CameraView() {
+  const [currentDetections, setCurrentDetections] = useState<any[]>([]);
+  const [lastCue, setLastCue] = useState<string>('');
+  const [estimatedDistance, setEstimatedDistance] = useState<number | null>(
+    null,
+  );
+
   const {heading} = useHeading();
-  const {location} = useLocation();
+  const {location, permissionGranted} = useLocation();
 
   // Safe camera devices hook - only if enabled
   const devices =
@@ -96,18 +117,27 @@ export default function CameraView() {
 
   useEffect(() => {
     if (!Camera) {
-      console.warn('Camera not available - skipping permission request');
+      logWarn(
+        'Camera not available - skipping permission request',
+        undefined,
+        'CameraView',
+      );
       return;
     }
 
-    console.log('Requesting camera permission...');
+    logDebug('Requesting camera permission', undefined, 'CameraView');
     (async () => {
       try {
         const cam = await Camera.requestCameraPermission();
-        console.log('Camera permission result:', cam);
-        if (cam !== 'granted') console.warn('Camera permission not granted');
+        logInfo('Camera permission result', {permission: cam}, 'CameraView');
+        if (cam !== 'granted')
+          logWarn(
+            'Camera permission not granted',
+            {permission: cam},
+            'CameraView',
+          );
       } catch (error) {
-        console.error('Error requesting camera permission:', error);
+        logError('Error requesting camera permission', error, 'CameraView');
       }
     })();
   }, []);
@@ -117,13 +147,14 @@ export default function CameraView() {
 
     try {
       const sub = policy.onCue((cue: any) => {
+        setLastCue(cue.text);
         if (speakCue) {
           speakCue(cue);
         }
       });
       return () => sub.remove();
     } catch (error) {
-      console.warn('Error setting up policy subscription:', error);
+      logWarn('Error setting up policy subscription', error, 'CameraView');
     }
   }, [policy]);
 
@@ -138,6 +169,22 @@ export default function CameraView() {
                 frameHeight: frame.height,
               })
                 .then((result: any) => {
+                  runOnJS(setCurrentDetections)(result.objects || []);
+
+                  // Calculate distance for the best detection
+                  const trafficLights = (result.objects || []).filter(
+                    (d: any) => d.cls === 'traffic_light',
+                  );
+                  if (trafficLights.length > 0) {
+                    const best = trafficLights.sort(
+                      (a: any, b: any) => b.conf - a.conf,
+                    )[0];
+                    const estimateDistanceMeters =
+                      require('../ai/utils').estimateDistanceMeters;
+                    const dist = estimateDistanceMeters(best.bbox);
+                    runOnJS(setEstimatedDistance)(dist);
+                  }
+
                   runOnJS(policy.ingest)({
                     detections: result.objects,
                     heading,
@@ -187,22 +234,19 @@ export default function CameraView() {
     );
   }
 
-  // If we have Camera module but devices are disabled, show a simple test view
+  // If we have Camera module but devices are disabled, show a demo mode
   if (Camera && !ENABLE_CAMERA_DEVICES) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: 'black',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
-        <Text style={{color: 'white', textAlign: 'center', padding: 20}}>
-          Camera Module Loaded Successfully! ✅{'\n\n'}
-          Camera devices disabled for testing.{'\n'}
-          Set ENABLE_CAMERA_DEVICES = true to continue.
-        </Text>
-      </View>
+      <DemoMode
+        detections={currentDetections}
+        distance={estimatedDistance}
+        lastCue={lastCue}
+        onDetectionsUpdate={setCurrentDetections}
+        onDistanceUpdate={setEstimatedDistance}
+        policy={policy}
+        heading={heading}
+        location={location}
+      />
     );
   }
 
@@ -219,6 +263,11 @@ export default function CameraView() {
         video={false}
         audio={false}
         enableZoomGesture={false}
+      />
+      <DetectionOverlay
+        detections={currentDetections}
+        distance={estimatedDistance}
+        lastCue={lastCue}
       />
     </View>
   );

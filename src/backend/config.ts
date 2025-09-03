@@ -1,4 +1,5 @@
 // Backend configuration for cross-platform compatibility
+import {Platform} from 'react-native';
 
 // Type declarations for cross-platform compatibility
 declare const window: any;
@@ -36,9 +37,11 @@ export const getEnvironmentMode = ():
   | 'local'
   | 'development'
   | 'production' => {
-  // Check if running locally
+  // Check if running locally (only on web platform)
   if (
+    Platform.OS === 'web' &&
     typeof window !== 'undefined' &&
+    window.location &&
     window.location.hostname === 'localhost'
   ) {
     return 'local';
@@ -119,10 +122,11 @@ export const getBackendConfig = (): BackendConfig => {
   };
 
   // Platform-specific adjustments for local development
-  if (environment === 'web') {
+  if (environment === 'web' && Platform.OS === 'web') {
     // For web, use current host if running locally
     if (
       typeof window !== 'undefined' &&
+      window.location &&
       window.location.hostname === 'localhost' &&
       config.apiUrl === defaultConfig.apiUrl
     ) {
@@ -137,6 +141,7 @@ export const getBackendConfig = (): BackendConfig => {
 
     if (
       typeof window !== 'undefined' &&
+      window.location &&
       window.location.hostname === 'localhost' &&
       config.wsUrl === defaultConfig.wsUrl
     ) {

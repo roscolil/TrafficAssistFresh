@@ -1,67 +1,65 @@
-// Safe imports with fallbacks
-let Tts: any;
-let Haptic: any;
+import {logWarn, logInfo, logDebug} from '../utils/logger';
 
+// Safe imports with error handling
+let TTS: any = null;
 try {
-  Tts = require('react-native-tts');
+  TTS = require('react-native-tts');
 } catch (error) {
-  console.warn('react-native-tts not available:', error);
+  logWarn('TTS module not available', error, 'Voice/Speech');
 }
 
+let HapticFeedback: any = null;
 try {
-  Haptic = require('react-native-haptic-feedback');
+  HapticFeedback = require('react-native-haptic-feedback');
 } catch (error) {
-  console.warn('react-native-haptic-feedback not available:', error);
+  logWarn('Haptic feedback module not available', error, 'Voice/Speech');
 }
 
-// Configure TTS for background audio (only if available)
-if (Tts) {
-  try {
-    Tts.setDefaultLanguage('en-US');
-    Tts.setDucking(true);
-    Tts.setDefaultRate(0.46);
-
-    // Set audio category for background playback
+export function initSpeech() {
+  if (TTS) {
     try {
-      Tts.setDefaultEngine('com.apple.ttsbundle.Samantha-compact');
+      TTS.setDefaultLanguage('en-US');
+      TTS.setDucking(true);
+      TTS.setDefaultRate(0.46);
+
+      // Try iOS default voice
+      try {
+        TTS.setDefaultEngine('com.apple.ttsbundle.Samantha-compact');
+        logInfo('TTS configured with iOS voice', undefined, 'Voice/Speech');
+      } catch {
+        logInfo('Using default TTS engine', undefined, 'Voice/Speech');
+      }
     } catch (error) {
-      // Fallback to default engine if Samantha is not available
-      console.log('Using default TTS engine');
+      logWarn('Error configuring TTS', error, 'Voice/Speech');
     }
-  } catch (error) {
-    console.warn('Error configuring TTS:', error);
   }
 }
 
-export function speakCue(cue: {
-  text: string;
-  priority: 'low' | 'medium' | 'high';
-}) {
-  // Haptic feedback (if available)
-  if (Haptic) {
+export async function speakCue(cue: {text: string; urgency?: number}) {
+  if (cue.urgency && HapticFeedback) {
     try {
-      Haptic.trigger(
-        cue.priority === 'high'
-          ? 'notificationError'
-          : cue.priority === 'medium'
-          ? 'notificationWarning'
-          : 'notificationSuccess',
+      // Haptic feedback based on urgency
+      HapticFeedback.trigger(
+        cue.urgency > 7 ? 'notificationError' : 'notificationWarning',
+        {
+          enableVibrateFallback: true,
+          ignoreAndroidSystemSettings: false,
+        },
       );
     } catch (error) {
-      console.warn('Haptic feedback failed:', error);
+      logWarn('Haptic feedback failed', error, 'Voice/Speech');
     }
   }
 
-  // Text-to-speech (if available)
-  if (Tts) {
+  if (TTS) {
     try {
-      Tts.stop();
-      Tts.speak(cue.text);
+      TTS.stop();
+      TTS.speak(cue.text);
+      logDebug('TTS spoke message', {text: cue.text}, 'Voice/Speech');
     } catch (error) {
-      console.warn('TTS speak failed:', error);
+      logWarn('TTS speak failed', error, 'Voice/Speech');
     }
   } else {
-    // Fallback: log the message when TTS is not available
-    console.log('TTS not available. Would speak:', cue.text);
+    logInfo('TTS not available. Would speak', {text: cue.text}, 'Voice/Speech');
   }
 }

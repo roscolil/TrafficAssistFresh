@@ -1,11 +1,11 @@
 // Web TTS mock using Speech Synthesis API
 const Tts = {
   setDefaultLanguage: (language) => {
-    console.log('TTS language set to:', language);
+    // Web browsers use Speech Synthesis API
   },
 
   setDucking: (enabled) => {
-    console.log('TTS ducking:', enabled);
+    // Web browsers handle audio ducking differently
   },
 
   setDefaultRate: (rate) => {
@@ -13,7 +13,7 @@ const Tts = {
   },
 
   setDefaultEngine: (engine) => {
-    console.log('TTS engine:', engine);
+    // Web browsers have different voice engines
   },
 
   speak: (text) => {
@@ -26,7 +26,7 @@ const Tts = {
       utterance.lang = 'en-US';
 
       window.speechSynthesis.speak(utterance);
-    } else {
+    } else if (process.env.NODE_ENV === 'development') {
       console.log('TTS not available. Would speak:', text);
     }
   },

@@ -3,6 +3,7 @@ import {estimateDistanceMeters, Detection} from '../ai/utils';
 import {nearestSignalAhead} from '../map/intersectionPack';
 import {cloudConfirmClient} from '../cloud/CloudConfirmClient';
 import {flags} from '../config/flags';
+import {logDebug} from '../utils/logger';
 
 type Cue = {text: string; priority: 'low' | 'medium' | 'high'};
 
@@ -49,6 +50,7 @@ export function useEarlyWarning() {
 
   cloudConfirmClient.onResponse(resp => {
     console.log('cloud confirm resp', resp);
+    logDebug('Cloud confirm response', resp, 'Logic/Policy');
   });
 
   return {

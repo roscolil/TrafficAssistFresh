@@ -7,30 +7,102 @@ const router = Router();
 // Submit traffic detection
 router.post('/', async (req: any, res: any) => {
   try {
-    const {deviceId, detection, location, heading, timestamp} = req.body;
+    // Handle both flat and nested formats
+    const {
+      device_id,
+      deviceId,
+      detection,
+      location,
+      latitude,
+      longitude,
+      confidence,
+      traffic_light_color,
+      heading,
+      timestamp,
+    } = req.body;
 
-    const detectionId = uuidv4();
+    const finalDeviceId = device_id || deviceId;
+    const finalConfidence = confidence || detection?.confidence;
+    const finalLocation = location || {lat: latitude, lng: longitude};
 
-    // Store detection in database
-    await pool.query(
-      `
-      INSERT INTO detections (id, device_id, location, heading, timestamp, 
-                             confidence, traffic_light_state, bbox)
-      VALUES ($1, $2, ST_SetSRID(ST_MakePoint($3, $4), 4326), $5, $6, $7, $8, $9)
-    `,
-      [
+    console.log('Received detection data:', JSON.stringify(req.body, null, 2));
+    console.log('Parsed values:', {
+      finalDeviceId,
+      finalConfidence,
+      finalLocation,
+      timestamp,
+    });
+
+    // Validate required fields
+    if (!finalDeviceId) {
+      return res.status(400).json({error: 'device_id is required'});
+    }
+    if (!finalConfidence) {
+      return res.status(400).json({error: 'confidence is required'});
+    }
+    if (!timestamp) {
+      return res.status(400).json({error: 'timestamp is required'});
+    }
+
+    let detectionId: string;
+
+    // Let database generate UUID - don't specify ID
+    try {
+      const result = await pool.query(
+        `INSERT INTO detections (device_id, timestamp, confidence) 
+         VALUES ($1, $2, $3) RETURNING id`,
+        [finalDeviceId, new Date(timestamp), finalConfidence],
+      );
+
+      detectionId = result.rows[0].id;
+      console.log('Detection inserted successfully with ID:', detectionId);
+
+      // Return success immediately after database insert
+      res.status(201).json({
         detectionId,
-        deviceId,
-        location.lng,
-        location.lat,
-        heading,
-        new Date(timestamp),
-        detection.confidence,
-        detection.state,
-        JSON.stringify(detection.bbox),
-      ],
-    );
+        status: 'processed',
+        message: 'Detection recorded successfully',
+      });
+    } catch (insertError) {
+      console.error('Detection insert failed:', insertError);
 
+      // Return the specific error
+      res.status(500).json({
+        error: 'Detection insert failed',
+        details:
+          insertError instanceof Error ? insertError.message : 'Unknown error',
+        sqlState: (insertError as any)?.code || 'unknown',
+        received: req.body,
+      });
+      return;
+    }
+
+    // Do async processing after response (no await)
+    processAsyncOperations(
+      finalDeviceId,
+      finalLocation,
+      detection || {confidence: finalConfidence, state: traffic_light_color},
+      detectionId,
+      timestamp,
+    );
+  } catch (error) {
+    console.error('Detection processing failed:', error);
+    res.status(500).json({
+      error: 'Detection processing failed',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// Async processing function
+async function processAsyncOperations(
+  deviceId: string,
+  location: any,
+  detection: any,
+  detectionId: string,
+  timestamp: string,
+) {
+  try {
     // Publish to Pub/Sub for real-time processing
     const eventData = {
       detectionId,
@@ -47,16 +119,11 @@ router.post('/', async (req: any, res: any) => {
     // Process nearby users for real-time alerts
     await processNearbyAlerts(location, detection, detectionId);
 
-    res.status(201).json({
-      detectionId,
-      status: 'processed',
-      message: 'Detection recorded successfully',
-    });
+    console.log('Async processing completed for detection:', detectionId);
   } catch (error) {
-    console.error('Detection processing failed:', error);
-    res.status(500).json({error: 'Detection processing failed'});
+    console.error('Async processing failed for detection:', detectionId, error);
   }
-});
+}
 
 // Get detections for a device
 router.get('/device/:deviceId', async (req: any, res: any) => {

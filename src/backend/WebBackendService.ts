@@ -1,4 +1,14 @@
 // Web Backend Service Integration
+import {Platform} from 'react-native';
+import {logWarn, logInfo, logDebug} from '../utils/logger';
+
+// Type declarations for cross-platform compatibility
+declare const window: any;
+declare const localStorage: any;
+declare const navigator: any;
+declare const screen: any;
+declare type PushSubscription = any;
+
 export class WebBackendService {
   private static instance: WebBackendService;
   private userId: string | null = null;
@@ -27,12 +37,21 @@ export class WebBackendService {
 
   private async registerDevice() {
     const deviceInfo = {
-      platform: 'web',
-      userAgent: navigator.userAgent,
-      screen: {
-        width: screen.width,
-        height: screen.height,
-      },
+      platform: Platform.OS || 'unknown',
+      userAgent:
+        Platform.OS === 'web' && typeof navigator !== 'undefined'
+          ? navigator.userAgent
+          : `React Native ${Platform.OS} ${Platform.Version}`,
+      screen:
+        Platform.OS === 'web' && typeof screen !== 'undefined'
+          ? {
+              width: screen.width,
+              height: screen.height,
+            }
+          : {
+              width: 0,
+              height: 0,
+            },
     };
 
     const response = await fetch(
@@ -54,13 +73,35 @@ export class WebBackendService {
 
   // PWA Push Notifications
   private async setupServiceWorker() {
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
+    if (
+      Platform.OS === 'web' &&
+      typeof navigator !== 'undefined' &&
+      'serviceWorker' in navigator &&
+      typeof window !== 'undefined' &&
+      'PushManager' in window
+    ) {
       try {
         this.swRegistration = await navigator.serviceWorker.register('/sw.js');
+        logInfo(
+          'Service worker registered successfully',
+          undefined,
+          'WebBackendService',
+        );
         await this.subscribeToPush();
       } catch (error) {
-        console.warn('Service worker registration failed:', error);
+        logWarn(
+          'Service worker registration failed',
+          error,
+          'WebBackendService',
+        );
+        // Continue without service worker - not critical for basic functionality
       }
+    } else {
+      logDebug(
+        'Service worker not supported or not in web environment',
+        undefined,
+        'WebBackendService',
+      );
     }
   }
 
@@ -75,7 +116,7 @@ export class WebBackendService {
 
       await this.updatePushSubscription(subscription);
     } catch (error) {
-      console.warn('Push subscription failed:', error);
+      logWarn('Push subscription failed', error, 'WebBackendService');
     }
   }
 
@@ -178,7 +219,12 @@ export class WebBackendService {
         ...properties,
         deviceId: this.deviceId,
         timestamp: Date.now(),
-        url: window.location.href,
+        url:
+          Platform.OS === 'web' &&
+          typeof window !== 'undefined' &&
+          window.location
+            ? window.location.href
+            : 'mobile://app',
       },
     };
 

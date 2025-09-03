@@ -1,6 +1,8 @@
-// Unified Backend Client for both Web and Mobile
+import {Platform} from 'react-native';
 import {cloudConfirmClient} from '../cloud/CloudConfirmClient';
 import {getBackendConfig, BackendConfig as ConfigType} from './config';
+import {logWarn, logInfo, logDebug} from '../utils/logger';
+import {flags} from '../config/flags';
 
 // Type declarations for cross-platform compatibility
 declare const window: any;
@@ -11,6 +13,7 @@ interface InitConfig {
   apiUrl: string;
   wsUrl: string;
   environment: 'web' | 'ios' | 'android';
+  enableWebSocket?: boolean; // Optional flag to control WebSocket connection
 }
 
 class UnifiedBackendClient {
@@ -19,6 +22,7 @@ class UnifiedBackendClient {
   private deviceId: string | null = null;
   private userId: string | null = null;
   private wsConnection: WebSocket | null = null;
+  private enableWebSocket: boolean = true;
 
   static getInstance(): UnifiedBackendClient {
     if (!UnifiedBackendClient.instance) {
@@ -33,9 +37,19 @@ class UnifiedBackendClient {
       wsUrl: config.wsUrl,
       environment: config.environment,
     };
+    this.enableWebSocket = config.enableWebSocket !== false; // Default to true unless explicitly disabled
     this.loadCredentials();
     this.registerDevice();
-    this.connectRealtime();
+
+    if (this.enableWebSocket) {
+      this.connectRealtime();
+    } else {
+      logInfo(
+        'WebSocket connection disabled by configuration',
+        undefined,
+        'UnifiedBackendClient',
+      );
+    }
   }
 
   private loadCredentials() {
@@ -58,6 +72,16 @@ class UnifiedBackendClient {
   private async registerDevice() {
     if (!this.config) return;
     if (this.deviceId && this.userId) return;
+
+    // Check if backend device registration is enabled
+    if (!flags.backendDeviceRegistrationEnabled) {
+      logInfo(
+        'Device registration disabled by feature flag',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
 
     try {
       const deviceInfo = {
@@ -91,20 +115,55 @@ class UnifiedBackendClient {
         }
       }
     } catch (error) {
-      console.warn('Device registration failed:', error);
+      logWarn('Device registration failed', error, 'UnifiedBackendClient');
     }
   }
 
   private connectRealtime() {
-    if (!this.config || !this.config.wsUrl || !this.deviceId) return;
+    if (!this.enableWebSocket) {
+      logInfo(
+        'WebSocket connection disabled by client config',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
+
+    // Check if backend WebSocket is enabled via feature flags
+    if (!flags.backendWebSocketEnabled) {
+      logInfo(
+        'WebSocket connection disabled by feature flag',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
+
+    if (!this.config || !this.config.wsUrl || !this.deviceId) {
+      logInfo(
+        'Skipping WebSocket connection - missing config or deviceId',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
 
     try {
-      this.wsConnection = new WebSocket(
-        `${this.config.wsUrl}?deviceId=${this.deviceId}`,
+      const wsUrl = `${this.config.wsUrl}?deviceId=${this.deviceId}`;
+      logInfo(
+        `Attempting WebSocket connection to: ${wsUrl}`,
+        undefined,
+        'UnifiedBackendClient',
       );
 
+      this.wsConnection = new WebSocket(wsUrl);
+
       this.wsConnection.onopen = () => {
-        console.log('Connected to real-time backend');
+        logInfo(
+          'Connected to real-time backend',
+          undefined,
+          'UnifiedBackendClient',
+        );
       };
 
       this.wsConnection.onmessage = event => {
@@ -112,17 +171,42 @@ class UnifiedBackendClient {
           const data = JSON.parse(event.data);
           this.handleRealtimeMessage(data);
         } catch (error) {
-          console.warn('Failed to parse WebSocket message:', error);
+          logWarn(
+            'Failed to parse WebSocket message',
+            error,
+            'UnifiedBackendClient',
+          );
         }
       };
 
-      this.wsConnection.onclose = () => {
-        console.log('Disconnected from real-time backend');
-        // Reconnect after 5 seconds
-        setTimeout(() => this.connectRealtime(), 5000);
+      this.wsConnection.onclose = event => {
+        const reason = event.reason || 'Unknown reason';
+        const code = event.code || 'Unknown code';
+        logInfo(
+          `Disconnected from real-time backend - Code: ${code}, Reason: ${reason}`,
+          undefined,
+          'UnifiedBackendClient',
+        );
+        // Only attempt to reconnect if the close wasn't intentional and WebSocket is still enabled
+        if (
+          event.code !== 1000 &&
+          this.enableWebSocket &&
+          flags.backendWebSocketEnabled
+        ) {
+          logInfo(
+            'Attempting to reconnect in 5 seconds...',
+            undefined,
+            'UnifiedBackendClient',
+          );
+          setTimeout(() => this.connectRealtime(), 5000);
+        }
+      };
+
+      this.wsConnection.onerror = error => {
+        logWarn('WebSocket connection error', error, 'UnifiedBackendClient');
       };
     } catch (error) {
-      console.warn('WebSocket connection failed:', error);
+      logWarn('WebSocket connection failed', error, 'UnifiedBackendClient');
     }
   }
 
@@ -140,8 +224,22 @@ class UnifiedBackendClient {
   }
 
   async submitDetection(detection: any, location: any, heading: number) {
+    // Check if backend device registration is enabled (required for detection submission)
+    if (!flags.backendDeviceRegistrationEnabled) {
+      logInfo(
+        'Backend device registration disabled - skipping detection submission',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
+
     if (!this.deviceId) {
-      console.warn('Device not registered, cannot submit detection');
+      logWarn(
+        'Device not registered, cannot submit detection',
+        undefined,
+        'UnifiedBackendClient',
+      );
       return;
     }
 
@@ -168,7 +266,7 @@ class UnifiedBackendClient {
         console.log('Detection submitted to backend:', result);
       }
     } catch (error) {
-      console.warn('Backend submission failed:', error);
+      logWarn('Backend submission failed', error, 'UnifiedBackendClient');
     }
 
     // Also send to existing cloud confirm service
@@ -183,11 +281,20 @@ class UnifiedBackendClient {
         heading: heading,
       });
     } catch (error) {
-      console.warn('Cloud confirm submission failed:', error);
+      logWarn('Cloud confirm submission failed', error, 'UnifiedBackendClient');
     }
   }
 
   subscribeToLocation(location: {lat: number; lng: number}) {
+    if (!this.enableWebSocket) {
+      logDebug(
+        'WebSocket disabled - location subscription skipped',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
+
     if (this.wsConnection && this.wsConnection.readyState === WebSocket.OPEN) {
       this.wsConnection.send(
         JSON.stringify({
@@ -195,11 +302,27 @@ class UnifiedBackendClient {
           location: location,
         }),
       );
+    } else {
+      logDebug(
+        'WebSocket not connected - location subscription skipped',
+        undefined,
+        'UnifiedBackendClient',
+      );
     }
   }
 
   async getNearbyTraffic(location: any, radius: number = 1000): Promise<any> {
     if (!this.config) throw new Error('Backend client not initialized');
+
+    // Check if backend traffic fetching is enabled
+    if (!flags.backendTrafficFetchEnabled) {
+      logInfo(
+        'Backend traffic fetching disabled by feature flag',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return [];
+    }
 
     try {
       const params = new URLSearchParams({
@@ -236,7 +359,26 @@ class UnifiedBackendClient {
 
   // Analytics
   async trackEvent(eventName: string, properties: any = {}) {
-    if (!this.config || !this.deviceId) return;
+    if (!this.config) return;
+
+    // Check if backend device registration is enabled (required for analytics)
+    if (!flags.backendDeviceRegistrationEnabled) {
+      logInfo(
+        'Backend device registration disabled - skipping analytics tracking',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
+
+    if (!this.deviceId) {
+      logInfo(
+        'Device not registered - skipping analytics tracking',
+        undefined,
+        'UnifiedBackendClient',
+      );
+      return;
+    }
 
     try {
       await fetch(`${this.config.apiUrl}/api/analytics/events`, {
@@ -253,22 +395,73 @@ class UnifiedBackendClient {
         }),
       });
     } catch (error) {
-      console.warn('Analytics tracking failed:', error);
+      logWarn('Analytics tracking failed', error, 'UnifiedBackendClient');
+    }
+  }
+
+  // Get connection status for UI components
+  getConnectionStatus(): 'online' | 'offline' | 'connecting' {
+    if (!this.enableWebSocket) {
+      // When WebSocket is disabled, consider it offline for real-time features
+      // but the API could still be accessible
+      return 'offline';
+    }
+
+    if (!this.wsConnection) {
+      return 'offline';
+    }
+
+    switch (this.wsConnection.readyState) {
+      case WebSocket.CONNECTING:
+        return 'connecting';
+      case WebSocket.OPEN:
+        return 'online';
+      case WebSocket.CLOSING:
+      case WebSocket.CLOSED:
+      default:
+        return 'offline';
+    }
+  }
+
+  // Check if backend API is accessible
+  async checkApiHealth(): Promise<boolean> {
+    if (!this.config) return false;
+
+    try {
+      const response = await fetch(`${this.config.apiUrl}/health`, {
+        method: 'GET',
+        timeout: 5000,
+      } as any);
+      return response.ok;
+    } catch (error) {
+      logWarn('API health check failed', error, 'UnifiedBackendClient');
+      return false;
     }
   }
 }
 
 export const backendClient = UnifiedBackendClient.getInstance();
 
-// Auto-initialize for web environment
-if (typeof window !== 'undefined') {
+// Auto-initialize for web environment only if backend integration is enabled
+if (
+  Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  flags.backendIntegrationEnabled
+) {
   // Web environment - get config from our config system
   const config = getBackendConfig();
   backendClient.initialize({
     apiUrl: config.apiUrl,
     wsUrl: config.wsUrl,
     environment: 'web',
+    enableWebSocket: flags.backendWebSocketEnabled, // Use feature flag for WebSocket
   });
+} else {
+  logInfo(
+    'Backend integration disabled or not in web environment - skipping auto-initialization',
+    undefined,
+    'UnifiedBackendClient',
+  );
 }
 
 export default UnifiedBackendClient;

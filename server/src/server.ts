@@ -49,7 +49,13 @@ import detectionRoutes from './routes/detections';
 import trafficRoutes from './routes/traffic';
 import userRoutes from './routes/users';
 import analyticsRoutes from './routes/analytics';
-import {healthCheck, systemStatus} from './routes/health';
+import {
+  healthCheck,
+  systemStatus,
+  initializeDatabaseSchema,
+  databaseSchema,
+} from './routes/health';
+import {initializeDatabaseInline} from './routes/init-inline';
 
 // Root route
 app.get('/', (req, res) => {
@@ -66,6 +72,8 @@ app.get('/', (req, res) => {
       'GET /api/traffic/nearby - Get nearby traffic',
       'GET /api/users - User endpoints',
       'POST /api/analytics/events - Analytics',
+      'POST /api/admin/init-database - Initialize database schema (dev only)',
+      'GET /api/admin/database-schema - Get database schema info',
     ],
     websocket: 'Available for real-time updates',
   });
@@ -74,6 +82,9 @@ app.get('/', (req, res) => {
 // Health check routes
 app.get('/health', healthCheck);
 app.get('/api/status', systemStatus);
+app.post('/api/admin/init-database', initializeDatabaseSchema);
+app.post('/api/admin/init-database-inline', initializeDatabaseInline);
+app.get('/api/admin/database-schema', databaseSchema);
 
 // API routes
 app.use('/api/devices', deviceRoutes);
